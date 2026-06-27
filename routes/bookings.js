@@ -7,7 +7,7 @@ const { verifyUser } = require('../middlewares/authMiddleware');
 const router = express.Router();
 
 // [CREATE] - নতুন বুকিং প্লেস করা
-router.post('/create',verifyUser, async (req, res) => {   // verifyUser সরিয়ে রাখুন এখন
+router.post('/create', verifyUser, async (req, res) => {
   try {
     const {
       hospitalId,
@@ -18,20 +18,34 @@ router.post('/create',verifyUser, async (req, res) => {   // verifyUser সর�
       selectedTests,
       totalAmount,
       patientName,
-      patientPhone
+      patientPhone,
+      patientAge,
+      patientGender,
+      patientProblem
     } = req.body;
 
+    // Full booking object with all fields
     const newBooking = {
       userEmail: req.headers.email || "guest@docline.com",
-      hospitalId: new ObjectId(hospitalId),     // ← এখানে সঠিকভাবে ObjectId করা হয়েছে
+      
+      hospitalId: new ObjectId(hospitalId),
       hospitalName,
+
       bookingType,
-      appointmentDate,
+      appointmentDate: new Date(appointmentDate),
+      
+      // Patient Details
       patientName,
+      patientAge: patientAge ? parseInt(patientAge) : null,
+      patientGender,
       patientPhone,
+      patientProblem: patientProblem || "",
+
       totalAmount: parseInt(totalAmount || 0),
+      
       status: "pending",
       createdAt: new Date(),
+      
       selectedDoctor: selectedDoctor || null,
       selectedTests: selectedTests || []
     };
@@ -45,7 +59,11 @@ router.post('/create',verifyUser, async (req, res) => {   // verifyUser সর�
     });
   } catch (error) {
     console.error("Booking Error:", error);
-    res.status(500).send({ success: false, error: error.message });
+    res.status(500).send({ 
+      success: false, 
+      message: "Failed to create booking",
+      error: error.message 
+    });
   }
 });
 
