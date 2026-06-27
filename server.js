@@ -7,8 +7,8 @@ const { connectDB } = require("./config/db");
 const userRoutes = require("./routes/userRoutes"); 
 const hospitalRoutes = require("./routes/hospital"); 
 const hospitalAdminRoutes = require("./routes/hospitalAdmin"); 
-const hospitalPublicRouter = require('./routes/hospitalPublic'); // তোমার ফাইলের সঠিক পাথ দাও
-
+const hospitalPublicRouter = require('./routes/hospitalPublic'); 
+const bookingRouter = require('./routes/bookings'); 
 
 
 
@@ -16,10 +16,14 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 /* Middleware */
+// সার্ভারে এটা চেক করুন
 app.use(cors({ 
-  origin: 'http://localhost:5173',
-  credentials: true 
+  origin: ['http://localhost:5173', 'http://localhost:3000'], // আপনার frontend ports
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'email']  // ← এই লাইনটি গুরুত্বপূর্ণ
 }));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -31,7 +35,7 @@ app.use('/users', userRoutes);
 app.use('/hospitals', hospitalRoutes); 
 app.use('/hospitals', hospitalAdminRoutes);    
 app.use('/hospital-public', hospitalPublicRouter);
-
+app.use('/bookings', bookingRouter)
 
 app.get('/', (req, res) => {
   res.send('DocLine Server Running');

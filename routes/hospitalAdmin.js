@@ -442,4 +442,81 @@ router.get('/details-internal/:id', async (req, res) => {
   }
 });
 
+// ==================== 1. GET ALL BOOKINGS FOR HOSPITAL ADMIN ====================
+router.get('/bookings/:adminEmail', async (req, res) => {
+  try {
+    const { adminEmail } = req.params;
+    console.log(`🔍 Fetching bookings for admin: ${adminEmail}`);
+
+    const hospitalsCollection = getDB().collection("hospitals");
+    const bookingsCollection = getDB().collection("bookings");
+
+    // হসপিটাল খুঁজে বের করা
+    const hospitalAccount = await hospitalsCollection.findOne({ 
+      adminEmail: adminEmail.toLowerCase().trim() 
+    });
+
+    if (!hospitalAccount) {
+      console.log("❌ Hospital not found with email:", adminEmail);
+      return res.status(404).send({ message: "Hospital not found for this email" });
+    }
+
+    const correctHospitalId = hospitalAccount._id;
+    console.log("✅ Hospital found. Correct ID:", correctHospitalId.toString());
+
+    // বুকিং খুঁজে বের করা (ObjectId + String দুইভাবে)
+    const bookings = await bookingsCollection.find({
+      $or: [
+        { hospitalId: correctHospitalId },                    // ObjectId
+        { hospitalId: correctHospitalId.toString() }         // String
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+
+    console.log(`✅ Found ${bookings.length} booking(s)`);
+
+    // Debug: প্রথম বুকিং এর hospitalId দেখানো
+    if (bookings.length > 0) {
+      console.log("Sample booking hospitalId:", bookings[0].hospitalId);
+    }
+
+    res.send(bookings);
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// ==================== 2. UPDATE BOOKING STATUS ====================
+router.patch('/bookings/status/:id', async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { status } = req.body;
+
+    if (!ObjectId.isValid(bookingId)) {
+      return res.status(400).send({ success: false, message: "Invalid Booking ID format" });
+    }
+
+    const bookingsCollection = getDB().collection("bookings");
+
+    const result = await bookingsCollection.updateOne(
+      { _id: new ObjectId(bookingId) },
+      { $set: { 
+          status: status, 
+          updatedAt: new Date() 
+        } 
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).send({ success: false, message: "Booking not found or status unchanged" });
+    }
+
+    console.log(`Booking ${bookingId} updated to ${status}`);
+    res.send({ success: true, message: `Booking status updated to ${status}!` });
+  } catch (error) {
+    console.error("Error updating booking status:", error);
+    res.status(500).send({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
