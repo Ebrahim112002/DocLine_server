@@ -9,7 +9,7 @@ const hospitalRoutes = require("./routes/hospital");
 const hospitalAdminRoutes = require("./routes/hospitalAdmin"); 
 const hospitalPublicRouter = require('./routes/hospitalPublic'); 
 const bookingRouter = require('./routes/bookings'); 
-
+const doctorAdminRouter = require('./routes/doctorAdmin');
 
 
 const app = express();
@@ -36,6 +36,7 @@ app.use('/hospitals', hospitalRoutes);
 app.use('/hospitals', hospitalAdminRoutes);    
 app.use('/hospital-public', hospitalPublicRouter);
 app.use('/bookings', bookingRouter)
+app.use('/doctors', doctorAdminRouter);
 
 app.get('/', (req, res) => {
   res.send('DocLine Server Running');

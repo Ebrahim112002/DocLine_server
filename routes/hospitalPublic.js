@@ -97,5 +97,34 @@ router.get('/details/:id', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+// =========================================================================
+// [GET] ALL ACTIVE DOCTORS WITH HOSPITAL METADATA (For AllDoctors.jsx)
+// =========================================================================
+router.get('/all-doctors', async (req, res) => {
+  try {
+    const doctorsCollection = getDB().collection("doctors");
+    const hospitalsCollection = getDB().collection("hospitals");
+
+    // Shokol active status dynamic mapping logic filtering load 
+    const activeDoctors = await doctorsCollection.find({ status: "active" }).toArray();
+
+    // Protiti doctor dynamic system mapping pipeline array processing
+    const combinedDoctors = await Promise.all(activeDoctors.map(async (doctor) => {
+      // Doctor profile er thaka hospital database object context pipeline track
+      const hospitalDoc = await hospitalsCollection.findOne({ _id: new ObjectId(doctor.hospitalId) });
+      
+      return {
+        ...doctor,
+        hospitalName: hospitalDoc ? hospitalDoc.hospitalName : doctor.hospitalName,
+        hospitalAddress: hospitalDoc ? hospitalDoc.address : "Location details not updated"
+      };
+    }));
+
+    res.send({ success: true, data: combinedDoctors });
+  } catch (error) {
+    console.error("Error fetching global active doctors registry:", error);
+    res.status(500).send({ success: false, message: "Internal Server Error" });
+  }
+});
 
 module.exports = router;

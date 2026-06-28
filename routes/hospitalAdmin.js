@@ -487,10 +487,11 @@ router.get('/bookings/:adminEmail', async (req, res) => {
 });
 
 // ==================== 2. UPDATE BOOKING STATUS ====================
+// ==================== 2. UPDATE BOOKING STATUS & AUTOMATIC QUEUE SYSTEM ====================
 router.patch('/bookings/status/:id', async (req, res) => {
   try {
     const bookingId = req.params.id;
-    const { status } = req.body;
+    const { status, adminEmail } = req.body; // ফ্রন্টএন্ড থেকে status এবং adminEmail আসবে
 
     if (!ObjectId.isValid(bookingId)) {
       return res.status(400).send({ success: false, message: "Invalid Booking ID format" });
@@ -498,25 +499,97 @@ router.patch('/bookings/status/:id', async (req, res) => {
 
     const bookingsCollection = getDB().collection("bookings");
 
+    // ১. প্রথমে কারেন্ট বুকিং ডেটা খুঁজে বের করি (তারিখ, হাসপাতাল এবং টাইপ জানার জন্য)
+    const currentBooking = await bookingsCollection.findOne({ _id: new ObjectId(bookingId) });
+    if (!currentBooking) {
+      return res.status(404).send({ success: false, message: "Booking not found" });
+    }
+
+    let updateFields = { status: status, updatedAt: new Date() };
+
+    // ২. 🎯 মেইন এপ্রুভাল লজিক: যখন এডমিন Approve করবে (status === 'confirmed')
+    if (status === 'confirmed' && !currentBooking.queueNumber) {
+      
+      // একই হাসপাতাল, একই অ্যাপয়েন্টমেন্ট ডেট এবং অলরেডি confirmed বুকিং গোনার বেস কোয়েরি
+      let queueQuery = {
+        hospitalId: currentBooking.hospitalId,
+        status: "confirmed",
+        appointmentDate: currentBooking.appointmentDate
+      };
+
+      // রিকোয়ারমেন্ট ১: ডক্টর অ্যাপয়েন্টমেন্ট হলে ডক্টরের ইমেইল অনুযায়ী আলাদা কিউ (Reset Every Day)
+      if (currentBooking.bookingType === 'doctor') {
+        queueQuery.bookingType = 'doctor';
+        queueQuery["selectedDoctor.doctorEmail"] = currentBooking.selectedDoctor?.doctorEmail;
+      } 
+      // 🔬 রিকোয়ারমেন্ট ২: ল্যাব টেস্ট অ্যাপয়েন্টমেন্ট হলে সব টেস্টের জন্য একটি কমন দৈনিক কিউ (Reset Every Day)
+      else if (currentBooking.bookingType === 'test') {
+        queueQuery.bookingType = 'test';
+      }
+
+      // ইতিমধ্যে কতজন লাইনে কনফার্মড আছে তা কাউন্ট করা
+      const countConfirmed = await bookingsCollection.countDocuments(queueQuery);
+
+      // 🚀 ফিউচার-প্রুফ আর্কিটেকচার ফিল্ডস যুক্ত করা
+      updateFields.queueNumber = countConfirmed + 1; // পরবর্তী সিরিয়াল নাম্বার
+      updateFields.queueStatus = "waiting";          // default status
+      updateFields.approvedAt = new Date();
+      updateFields.approvedBy = adminEmail || "Hospital Admin";
+      updateFields.calledAt = null;
+      updateFields.completedAt = null;
+      updateFields.estimatedWaitTime = ((countConfirmed) * 15) + " mins"; // প্রতি রোগীর জন্য ১৫ মিনিট করে আনুমানিক সময়
+    }
+
+    // ৩. যদি কোনো বুকিং বাতিল (cancelled) করা হয়, তবে কিউ স্ট্যাটাসও বাতিল হবে
+    if (status === 'cancelled') {
+      updateFields.queueStatus = 'cancelled';
+    }
+
+    // ডেটাবেজে আপডেট করা
     const result = await bookingsCollection.updateOne(
       { _id: new ObjectId(bookingId) },
-      { $set: { 
-          status: status, 
-          updatedAt: new Date() 
-        } 
-      }
+      { $set: updateFields }
     );
 
     if (result.modifiedCount === 0) {
       return res.status(404).send({ success: false, message: "Booking not found or status unchanged" });
     }
 
-    console.log(`Booking ${bookingId} updated to ${status}`);
-    res.send({ success: true, message: `Booking status updated to ${status}!` });
+    // ৪. ⚡ অটোমেটিক সিরিয়াল রিক্যালকুলেশন (মাঝে কেউ ক্যানসেল হলে গ্যাপ ফিলআপ করা)
+    if (status === 'cancelled' && currentBooking.status === 'confirmed') {
+      let rebuildQuery = {
+        hospitalId: currentBooking.hospitalId,
+        status: "confirmed",
+        appointmentDate: currentBooking.appointmentDate
+      };
+
+      if (currentBooking.bookingType === 'doctor') {
+        rebuildQuery.bookingType = 'doctor';
+        rebuildQuery["selectedDoctor.doctorEmail"] = currentBooking.selectedDoctor?.doctorEmail;
+      } else {
+        rebuildQuery.bookingType = 'test';
+      }
+
+      // এপ্রুভালের সময় অনুযায়ী সাজিয়ে বাকিদের সিরিয়াল রি-অ্যারেঞ্জ করা
+      const activeBookings = await bookingsCollection.find(rebuildQuery).sort({ approvedAt: 1 }).toArray();
+
+      for (let i = 0; i < activeBookings.length; i++) {
+        await bookingsCollection.updateOne(
+          { _id: activeBookings[i]._id },
+          { $set: { queueNumber: i + 1, estimatedWaitTime: (i * 15) + " mins" } }
+        );
+      }
+    }
+
+    console.log(`Booking ${bookingId} approved & smart queue generated.`);
+    res.send({ success: true, message: `Booking status updated and queue generated!` });
+
   } catch (error) {
     console.error("Error updating booking status:", error);
     res.status(500).send({ success: false, error: error.message });
   }
 });
+
+module.exports = router;
 
 module.exports = router;

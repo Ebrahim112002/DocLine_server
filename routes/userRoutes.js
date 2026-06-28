@@ -73,11 +73,17 @@ router.post('/', async (req, res) => {
     }
 
     // ৩. মেইন ইউজার অবজেক্ট তৈরি (Upsert মেকানিজম ব্যবহার করা হলো যেন ফায়ারবেস সোশাল লগইনেও ডাটা সিঙ্ক হয়)
-    const userPayload = {
+   const userPayload = {
       name: user.name,
       email: cleanEmail,
       uid: user.uid, 
       photoURL: user.photoURL || "",
+      
+      // 🔥 নতুন যোগ করা ফিল্ডগুলো
+      phone: user.phone || "",
+      gender: user.gender || "",
+      dateOfBirth: user.dateOfBirth || null,
+
       role: finalRole, 
       hospitalId: hospitalId,
       status: "active",
@@ -203,6 +209,46 @@ router.delete('/:id', verifyUser, verifyAdmin, async (req, res) => {
       success: true, 
       deletedCount: result.deletedCount 
     });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// routes/userRoutes.js এর শেষে যোগ করো (DELETE রুটের আগে)
+
+
+// =========================================================================
+// [UPDATE PROFILE] - User নিজে প্রোফাইল আপডেট করতে পারবে
+// =========================================================================
+router.put('/profile', verifyUser, async (req, res) => {
+  try {
+    const userEmail = req.userEmail; // middleware থেকে আসবে
+    const updateData = req.body;
+    const usersCollection = getUsersCollection();
+
+    const allowedUpdates = {
+      name: updateData.name,
+      photoURL: updateData.photoURL,
+      phone: updateData.phone,
+      gender: updateData.gender,
+      dateOfBirth: updateData.dateOfBirth,
+      updatedAt: new Date()
+    };
+
+    const result = await usersCollection.updateOne(
+      { email: userEmail },
+      { $set: allowedUpdates }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(400).send({ success: false, message: "No changes made" });
+    }
+
+    res.send({ 
+      success: true, 
+      message: "Profile updated successfully!" 
+    });
+
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
