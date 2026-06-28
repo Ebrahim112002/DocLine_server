@@ -16,8 +16,8 @@ const connectDB = async () => {
   try {
     await client.connect();
 
-    await client.db("admin").command({ ping: 1 });
-
+   // await client.db("admin").command({ ping: 1 });
+  await client.connect();
     db = client.db("doclineDB");
 
     console.log("MongoDB Connected 🚀");

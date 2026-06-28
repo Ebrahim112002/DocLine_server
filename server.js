@@ -18,7 +18,7 @@ const port = process.env.PORT || 3000;
 /* Middleware */
 // সার্ভারে এটা চেক করুন
 app.use(cors({ 
-  origin: ['http://localhost:5173', 'http://localhost:3000'], // আপনার frontend ports
+  origin: ['http://localhost:5173', 'http://localhost:3000','https://doclineebrahim.netlify.app/'], // frontend ports
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'email']  // ← এই লাইনটি গুরুত্বপূর্ণ
